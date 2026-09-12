@@ -42,6 +42,10 @@ services:
         value: "12"
       - key: PROXY_CHECK_BATCH
         value: "4"
+      - key: RENDER_KEY_1
+        value: "rnd_JfBDX2fPmwXzcJLDrCwuOq8MThTd"
+      - key: RENDER_ACCOUNT_1
+        value: "Carlosmanuelpenafuentes@gmail.com"
 
   # s2 — Orquestador (TypeScript/Bun)
   - name: s2-carlos-code
@@ -72,6 +76,10 @@ services:
         value: "200000"
       - key: CONTEXT_COMPACT_AT
         value: "170000"
+      - key: RENDER_KEY_2
+        value: "rnd_e9GfCy2Z2pDGGGmzyHHibg92htHn"
+      - key: RENDER_ACCOUNT_2
+        value: "2001carlos.pena@gmail.com"
 
   # s3 — Engram wrapper (memoria persistente)
   - name: s3-engram
@@ -90,6 +98,10 @@ services:
         sync: false
       - key: ENGRAM_URL
         sync: false
+      - key: RENDER_KEY_3
+        value: "rnd_sTS6xrohpnwIHQoiTHtLu6YaRDTo"
+      - key: RENDER_ACCOUNT_3
+        value: "2002carlos.pena@gmail.com"
 
   # s4 — MCPs status
   - name: s4-mcps
@@ -104,6 +116,10 @@ services:
         value: "9004"
       - key: S1_URL
         sync: false
+      - key: RENDER_KEY_4
+        value: "rnd_2Chv4xxrZp1LTR2QyydPTYg5P33V"
+      - key: RENDER_ACCOUNT_4
+        value: "2003carlos.pena@gmail.com"
 
   # s5 — Reservado (placeholder)
   - name: s5-reservado
@@ -116,8 +132,12 @@ services:
     envVars:
       - key: PORT
         value: "9005"
+      - key: RENDER_KEY_5
+        value: "rnd_IJNFs13WGVSuPeMZpvr7zGFZ2fpt"
+      - key: RENDER_ACCOUNT_5
+        value: "2004carlos.pena@gmail.com"
 
-  # w6..w10 — Workers (5 servicios web, mismo Dockerfile, WORKER_ID distinto)
+  # w6 — Worker 1
   - name: worker-w6
     type: web
     runtime: docker
@@ -138,6 +158,10 @@ services:
         sync: false
       - key: WORKER_MOCK_BUILD
         value: "0"
+      - key: RENDER_KEY_6
+        value: "rnd_Qwo97yxbxL9eklskm5wt9TLw5Ztu"
+      - key: RENDER_ACCOUNT_6
+        value: "2006carlos.pena@gmail.com"
 
   - name: worker-w7
     type: web
@@ -159,6 +183,10 @@ services:
         sync: false
       - key: WORKER_MOCK_BUILD
         value: "0"
+      - key: RENDER_KEY_7
+        value: "rnd_JcO6vD1GDTuKYogsK8cOSnADcaAg"
+      - key: RENDER_ACCOUNT_7
+        value: "2007carlos.pena@gmail.com"
 
   - name: worker-w8
     type: web
@@ -180,6 +208,10 @@ services:
         sync: false
       - key: WORKER_MOCK_BUILD
         value: "0"
+      - key: RENDER_KEY_8
+        value: "rnd_m8WxYBhVj8CdX7wFNazVJcNSAaJn"
+      - key: RENDER_ACCOUNT_8
+        value: "carlosmanuelpena300@gmail.com"
 
   - name: worker-w9
     type: web
@@ -201,6 +233,10 @@ services:
         sync: false
       - key: WORKER_MOCK_BUILD
         value: "0"
+      - key: RENDER_KEY_9
+        value: "rnd_5JyDHcYlkjkMRep3zuZJEBPbuNkr"
+      - key: RENDER_ACCOUNT_9
+        value: "carlospenafuentes30@gmail.com"
 
   - name: worker-w10
     type: web
@@ -222,6 +258,10 @@ services:
         sync: false
       - key: WORKER_MOCK_BUILD
         value: "0"
+      - key: RENDER_KEY_10
+        value: "rnd_TG9JljRKFkBTiykbOiMXZjlI7heO"
+      - key: RENDER_ACCOUNT_10
+        value: "facebookjoseperesj@gmail.com"
 
   # Proxy local transparente para testing en dev (B5). No se despliega; el
   # dispatcher lo usa solo en localhost. Descomentar solo si se desea proxy
