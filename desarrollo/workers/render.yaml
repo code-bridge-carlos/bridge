@@ -1,0 +1,97 @@
+# Blueprint Render free para los workers w6-w10.
+# Todos usan el MISMO build dir (workers/) y se distinguen por WORKER_ID.
+# s1 es el único que necesita URL pública; los workers solo hablan con s1 y
+# el keep-alive de s1 los pingea por la URL interna (services_status).
+databases:
+  - name: sistema-multiagente-db  # definida aquí solo para documentación; usar Supabase real (F14)
+    databaseName: postgres
+    user: postgres
+    plan: free
+
+services:
+  - type: web
+    name: worker-w6
+    runtime: docker
+    repo: https://github.com/SUBSTITUIR/SISTEMA-MULTIAGENTE  # F14 despliegue
+    dockerfilePath: ./desarrollo/workers/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: WORKER_ID
+        value: w6
+      - key: S1_URL
+        sync: false   # setear en panel: URL de s1
+      - key: CONTROL_TOKEN
+        sync: false
+      - key: WORKER_MOCK_BUILD
+        value: "0"
+    # Cada worker libre en Render se suspende tras 15min de inactividad web;
+    # el keep-alive de s1 (F3/B2) mantiene el flujo si está activo.
+
+  - type: web
+    name: worker-w7
+    runtime: docker
+    repo: https://github.com/SUBSTITUIR/SISTEMA-MULTIAGENTE
+    dockerfilePath: ./desarrollo/workers/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: WORKER_ID
+        value: w7
+      - key: S1_URL
+        sync: false
+      - key: CONTROL_TOKEN
+        sync: false
+      - key: WORKER_MOCK_BUILD
+        value: "0"
+
+  - type: web
+    name: worker-w8
+    runtime: docker
+    repo: https://github.com/SUBSTITUIR/SISTEMA-MULTIAGENTE
+    dockerfilePath: ./desarrollo/workers/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: WORKER_ID
+        value: w8
+      - key: S1_URL
+        sync: false
+      - key: CONTROL_TOKEN
+        sync: false
+      - key: WORKER_MOCK_BUILD
+        value: "0"
+
+  - type: web
+    name: worker-w9
+    runtime: docker
+    repo: https://github.com/SUBSTITUIR/SISTEMA-MULTIAGENTE
+    dockerfilePath: ./desarrollo/workers/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: WORKER_ID
+        value: w9
+      - key: S1_URL
+        sync: false
+      - key: CONTROL_TOKEN
+        sync: false
+      - key: WORKER_MOCK_BUILD
+        value: "0"
+
+  - type: web
+    name: worker-w10
+    runtime: docker
+    repo: https://github.com/SUBSTITUIR/SISTEMA-MULTIAGENTE
+    dockerfilePath: ./desarrollo/workers/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: WORKER_ID
+        value: w10
+      - key: S1_URL
+        sync: false
+      - key: CONTROL_TOKEN
+        sync: false
+      - key: WORKER_MOCK_BUILD
+        value: "0"

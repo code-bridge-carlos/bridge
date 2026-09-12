@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>s1 — Panel · Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e6e6e6;
+           display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .card { background: #171a23; border: 1px solid #262b38; border-radius: 12px;
+            padding: 32px; width: 340px; }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    p.sub { color: #8b93a7; font-size: 13px; margin-bottom: 20px; }
+    label { display: block; font-size: 13px; color: #aab2c5; margin: 12px 0 6px; }
+    input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2c3345;
+            background: #0f1117; color: #e6e6e6; font-size: 14px; }
+    button { width: 100%; margin-top: 20px; padding: 11px; border: 0; border-radius: 8px;
+             background: #3b82f6; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #2563eb; }
+    .error { background: #3f1d2b; color: #fda4af; border: 1px solid #701f3a;
+             border-radius: 8px; padding: 10px; margin-top: 16px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Panel s1</h1>
+    <p class="sub">Inicia sesión para acceder al dashboard</p>
+    <form method="POST" action="/login" autocomplete="off">
+      <label for="user">Usuario</label>
+      <input id="user" name="user" required autofocus>
+      <label for="pass">Contraseña</label>
+      <input id="pass" name="pass" type="password" required>
+      <button type="submit">Entrar</button>
+    </form>
+    {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+  </div>
+</body>
+</html>

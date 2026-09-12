@@ -1,0 +1,19 @@
+{
+  "name": "s2-carlos-code",
+  "version": "0.1.0",
+  "description": "Orquestador del sistema multiagente: decide cómo dividir y ejecutar tareas (modo plan permanente sobre OpenCode headless).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.5.0"
+  }
+}

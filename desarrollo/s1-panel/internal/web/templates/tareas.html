@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel s1 — Tareas</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e6e6e6; }
+    .topbar { display: flex; align-items: center; justify-content: space-between;
+              padding: 14px 24px; background: #171a23; border-bottom: 1px solid #262b38; }
+    .brand { font-weight: 700; font-size: 17px; }
+    .brand a { color: inherit; text-decoration: none; }
+    .right { display: flex; align-items: center; gap: 12px; }
+    .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #2c3345;
+           background: #212634; color: #e6e6e6; font-size: 13px; cursor: pointer;
+           text-decoration: none; display: inline-block; }
+    .btn:hover { background: #2a3042; }
+    .btn-primary { background: #3b82f6; border-color: #3b82f6; color: white; font-weight: 600; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-danger { background: #4c1d26; border-color: #701f3a; color: #fca5a5; }
+    .btn-danger:hover { background: #5d2230; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    main { padding: 24px; max-width: 1000px; margin: 0 auto; }
+    .card { background: #171a23; border: 1px solid #262b38; border-radius: 10px;
+            padding: 18px; margin-bottom: 20px; }
+    h2 { font-size: 15px; margin-bottom: 12px; color: #aab2c5; }
+    textarea { width: 100%; min-height: 90px; padding: 12px; border-radius: 8px;
+               border: 1px solid #2c3345; background: #0f1117; color: #e6e6e6;
+               font-size: 14px; font-family: inherit; resize: vertical; }
+    .row { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
+    .hint { font-size: 12px; color: #8b93a7; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 14px; text-align: left; font-size: 13px; vertical-align: top; }
+    th { color: #8b93a7; font-weight: 600; font-size: 11px; text-transform: uppercase;
+         letter-spacing: 0.5px; border-bottom: 1px solid #262b38; }
+    tr { border-bottom: 1px solid #1d2230; }
+    tr:last-child { border-bottom: 0; }
+    .prompt-cell { max-width: 340px; word-break: break-word; }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+             white-space: nowrap; }
+    .badge.pendiente { background: #3f3412; color: #facc15; }
+    .badge.enviada  { background: #123f2a; color: #4ade80; }
+    .badge.planificando { background: #1e3a5f; color: #7dd3fc; }
+    .badge.ejecutando   { background: #3f3412; color: #facc15; }
+    .badge.completada   { background: #123f2a; color: #4ade80; }
+    .badge.fallida      { background: #3f1d2b; color: #f87171; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .muted { color: #8b93a7; font-size: 12px; }
+    .lock { color: #f87171; font-size: 12px; font-style: italic; }
+    .flash { background: #123f2a; color: #4ade80; border: 1px solid #166534;
+             border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+    .flash.err { background: #3f1d2b; color: #f87171; border-color: #701f3a; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><a href="/">⚙ Panel s1</a> · <span style="color:#8b93a7">Tareas</span></div>
+    <div class="right">
+      <span class="muted">{{.User}}</span>
+      <a class="btn" href="/">Dashboard</a>
+      <a class="btn" href="/logout">Salir</a>
+    </div>
+  </div>
+
+  <main>
+    <div class="card">
+      <h2>Nueva tarea</h2>
+      <form method="POST" action="/api/tareas">
+        <textarea name="prompt" placeholder="Describe la tarea para el orquestador (s2).&#10;Cada línea es UNA tarea: puedes pegar varias a la vez.&#10;&#10;Ejemplo:&#10;Revisa el README y propón mejoras&#10;Audita los endpoints de auth" required autofocus></textarea>
+        <div class="row">
+          <button class="btn btn-primary" type="submit">Guardar tarea(s)</button>
+          <span class="hint">Se persisten en `tareas_panel` (Supabase). Cada línea se guarda como una tarea independiente.</span>
+        </div>
+      </form>
+    </div>
+
+    {{if .FlashOK}}<div class="flash">✓ Tarea enviada a s2.</div>{{end}}
+    {{if .FlashErr}}<div class="flash err">✗ {{.FlashErr}}</div>{{end}}
+
+    <div class="card">
+      <h2>Tareas guardadas (desde base de datos)</h2>
+      {{if .Tareas}}
+      <table>
+        <thead>
+          <tr><th>Prompt original</th><th>Subtareas</th><th>Estado general</th><th>Acciones</th></tr>
+        </thead>
+        <tbody>
+          {{range .Tareas}}
+          <tr>
+            <td class="prompt-cell">{{.Prompt}}</td>
+            <td>
+              {{if .SubtaskCount}}{{.SubtaskCount}}{{else}}—{{end}}
+            </td>
+            <td>
+              {{if .EnviadaAS2}}
+                <span class="badge enviada">enviada a s2</span>
+                {{if .TaskEstado}}<span class="badge {{.TaskEstado}}">{{.TaskEstado}}</span>{{end}}
+              {{else}}
+                <span class="badge pendiente">pendiente</span>
+              {{end}}
+            </td>
+            <td class="actions">
+              <button class="btn" onclick="copiar('{{.ID}}', this)">Copiar</button>
+              {{if .EnviadaAS2}}
+                <button class="btn btn-danger" disabled title="No se puede cancelar ni corregir desde s1">Enviar tarea</button>
+                <span class="lock">🔒 control en TUI de s2</span>
+              {{else}}
+                <form method="POST" action="/api/tareas/{{.ID}}/enviar" onsubmit="return confirm('¿Enviar a s2? Tras enviar NO se puede cancelar ni corregir desde s1.')">
+                  <button class="btn btn-primary" type="submit">Enviar tarea</button>
+                </form>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="muted">No hay tareas guardadas todavía.</p>
+      {{end}}
+    </div>
+  </main>
+
+  <script>
+    // Cada tarea guardada puede copiarse al portapapeles.
+    async function copiar(idTarea, btn) {
+      // El texto exacto se recupera de un dataset guardado en la fila.
+      const fila = btn.closest('tr');
+      const texto = fila.querySelector('.prompt-cell').innerText;
+      try {
+        await navigator.clipboard.writeText(texto);
+        const prev = btn.textContent;
+        btn.textContent = '✓ Copiada';
+        setTimeout(() => btn.textContent = prev, 1500);
+      } catch (e) {
+        // Fallback para entornos sin permisos de clipboard
+        const ta = document.createElement('textarea');
+        ta.value = texto; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); ta.remove();
+        btn.textContent = '✓ Copiada';
+        setTimeout(() => btn.textContent = prev = '', 1500);
+      }
+    }
+  </script>
+</body>
+</html>

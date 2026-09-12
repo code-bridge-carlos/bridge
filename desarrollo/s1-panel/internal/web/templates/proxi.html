@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>s1 — Proxi</title>
+<style>
+  body { font-family: ui-monospace, Menlo, monospace; background:#0b1020; color:#d7dbf0; margin:0; }
+  header { background:#141b33; padding:14px 22px; border-bottom:1px solid #2a3556; display:flex; gap:18px; align-items:center; }
+  header a { color:#8fa3ff; text-decoration:none; font-weight:bold; }
+  main { padding:22px; max-width:1100px; margin:0 auto; }
+  h2 { color:#a5b4fc; margin:26px 0 10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:#8b9cd9; border-bottom:2px solid #2a3556; padding:6px 8px; }
+  td { border-bottom:1px solid #1d2744; padding:6px 8px; word-break:break-all; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; }
+  .ok { background:#12342a; color:#6ee7b7; }
+  .warn { background:#3a2f12; color:#fcd34d; }
+  .err { background:#42121c; color:#fca5a5; }
+  .info { background:#1a2542; color:#9db4ff; }
+  button, select, input { background:#1c2545; color:#d7dbf0; border:1px solid #33406b;
+    border-radius:6px; padding:5px 10px; font-size:13px; cursor:pointer; }
+  button:hover { background:#26335c; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0; }
+  .card { background:#111a35; border:1px solid #212d54; border-radius:10px; padding:14px 18px; margin:12px 0; }
+  .muted { color:#7f8cc0; font-size:12px; }
+  #resultado { background:#0d1530; border:1px solid #21305e; padding:10px 14px; border-radius:8px;
+    font-size:13px; white-space:pre-wrap; min-height:20px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">← Panel</a><a href="/tareas">Tareas</a><a href="/proxi">Proxi</a>
+</header>
+<main>
+  <h2>Proxi · gestión de proxies</h2>
+  <div class="card">
+    <div class="row">
+      <span>Pool: <b>{{.ProxyCount}}</b> proxies</span>
+      <span class="muted">Último refresh: {{if .LastRefresh}}{{.LastRefresh}}{{else}}nunca{{end}}</span>
+    </div>
+    <div class="row">
+      <button onclick="run('/api/proxy/refresh','POST',{})">↻ Refresh GitHub (proxmint)</button>
+      <button onclick="run('/api/proxy/asignar-auto','POST',{})">⚡ Asignar automáticamente</button>
+    </div>
+    <div class="row">
+      <select id="selServ"><option value="">— servicio —</option>
+        {{range .Destinos}}<option value="{{.}}">{{.}}</option>{{end}}
+      </select>
+      <input id="selProxy" placeholder="http://ip:puerto (proxy del pool)" size="30">
+      <button onclick="asignar()">Asignar manual →</button>
+      <button onclick="obtener()">Obtener IP vía proxy</button>
+      <button onclick="retirar()">Retirar (liberada)</button>
+    </div>
+    <div id="resultado">Acciones → /api/proxy/*</div>
+  </div>
+
+  <h2>Asignaciones (OK = activa y confirmada · reserva = activa sin confirmar · liberada = retirada)</h2>
+  <table>
+    <tr><th>Servicio</th><th>Proxy</th><th>Origen</th><th>Asignada</th><th>Estado</th><th>Confirmada</th><th></th></tr>
+    {{range .Assignments}}
+    <tr>
+      <td>{{.Servicio}}</td><td>{{.ProxyURL}}</td><td>{{.Origen}}</td>
+      <td>{{.AsignadoAt}}</td>
+      <td>{{if .Activo}}{{if .Confirmado}}<span class="badge ok">OK</span>{{else}}<span class="badge warn">reserva</span>{{end}}{{else}}<span class="badge info">liberada</span>{{end}}</td>
+      <td>{{if .ConfirmadoAt}}{{.ConfirmadoAt}}{{else}}—{{end}}</td>
+      <td>
+        {{if .Activo}}<button onclick="nuevoProxy('{{.Servicio}}','{{.ProxyURL}}')" title="Asignar un proxy nuevo a {{.Servicio}} (retira el actual)">⋮</button>{{else}}—{{end}}
+      </td>
+    </tr>
+    {{else}}<tr><td colspan="7" class="muted">Sin asignaciones todavía</td></tr>{{end}}
+  </table>
+
+  <h2>Pool</h2>
+  <table>
+    <tr><th>proxy_url</th><th>tipo</th><th>clasificación</th><th>IP vista</th><th>oculta</th><th>lat</th><th>último check</th><th></th></tr>
+    {{range .Pool}}
+    <tr>
+      <td>{{.ProxyURL}}</td><td>{{.Tipo}}</td>
+      <td>{{if eq .Clasificacion "validado"}}<span class="badge ok">validado</span>{{else if eq .Clasificacion "descartado"}}<span class="badge err">no comprobado</span>{{else}}<span class="badge info">nuevo</span>{{end}}</td>
+      <td>{{.IPVista}}</td>
+      <td>{{if eq .OcultaS "sí"}}<span class="badge ok">sí</span>{{else if eq .OcultaS "no"}}<span class="badge warn">no</span>{{else}}—{{end}}</td>
+      <td>{{if .LatenciaMS}}{{.LatenciaMS}}ms{{else}}—{{end}}</td>
+      <td>{{if .LastChecked}}{{.LastChecked}}{{else}}—{{end}}</td>
+      <td><button onclick="verificar('{{.ProxyURL}}')">verificar</button></td>
+    </tr>
+    {{else}}<tr><td colspan="8" class="muted">Pool vacío — pulse "Refresh GitHub"</td></tr>{{end}}
+  </table>
+</main>
+<script>
+async function run(url, method, body) {
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.redirected) { location.reload(); return; }
+  const txt = await res.text();
+  document.getElementById('resultado').textContent = url + ' → ' + res.status + ' ' + txt;
+}
+function verificar(u) { run('/api/proxy/verificar','POST',{proxy_url:u}); }
+function asignar() {
+  const s = document.getElementById('selServ').value, p = document.getElementById('selProxy').value;
+  if (!s || !p) { alert('elige servicio y proxy'); return; }
+  run('/api/proxy/asignar','POST',{servicio:s, proxy_url:p});
+}
+function obtener() {
+  const s = document.getElementById('selServ').value;
+  if (!s) { alert('elige servicio'); return; }
+  run('/api/proxy/obtener','POST',{servicio:s});
+}
+function retirar() {
+  const s = document.getElementById('selServ').value;
+  if (!s) { alert('elige servicio'); return; }
+  run('/api/proxy/retirar','POST',{servicio:s});
+}
+function nuevoProxy(servicio, actual) {
+  if (!confirm(`¿Asignar un proxy NUEVO a ${servicio}? Se retira el actual (${actual}).`)) return;
+  run('/api/proxy/asignar-nuevo','POST',{servicio});
+}
+</script>
+</body>
+</html>

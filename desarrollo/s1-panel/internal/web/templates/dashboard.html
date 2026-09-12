@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel s1 — Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e6e6e6; }
+    .topbar { display: flex; align-items: center; justify-content: space-between;
+              padding: 14px 24px; background: #171a23; border-bottom: 1px solid #262b38; }
+    .brand { font-weight: 700; font-size: 17px; }
+    .right { display: flex; align-items: center; gap: 12px; }
+    .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #2c3345;
+           background: #212634; color: #e6e6e6; font-size: 13px; cursor: pointer;
+           text-decoration: none; display: inline-block; }
+    .btn:hover { background: #2a3042; }
+    .btn-primary { background: #3b82f6; border-color: #3b82f6; color: white; font-weight: 600; }
+    .btn-primary:hover { background: #2563eb; }
+    .user { color: #8b93a7; font-size: 13px; }
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .toggle-row { display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
+                  background: #171a23; border: 1px solid #262b38; border-radius: 10px;
+                  padding: 12px 18px; }
+    .toggle-row label { font-size: 14px; font-weight: 600; }
+    .switch { position: relative; width: 88px; height: 34px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #2c3345; border-radius: 34px;
+              display: flex; align-items: center; justify-content: space-between;
+              padding: 0 10px; font-size: 11px; font-weight: 700; color: #8b93a7;
+              transition: 0.2s; user-select: none; }
+    .slider .on { opacity: 0.4; order: 0; }
+    .slider .off { opacity: 1; order: 1; }
+    .switch input:checked + .slider { background: #166534; }
+    .switch input:checked + .slider .on { opacity: 1; color: #86efac; order: 0; }
+    .switch input:checked + .slider .off { opacity: 0.4; order: 1; }
+    .hint { font-size: 12px; color: #8b93a7; }
+    table { width: 100%; border-collapse: collapse; background: #171a23;
+            border: 1px solid #262b38; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 12px 16px; text-align: left; font-size: 14px; }
+    th { background: #1c2029; color: #8b93a7; font-weight: 600; font-size: 12px;
+         text-transform: uppercase; letter-spacing: 0.5px; }
+    tr { border-bottom: 1px solid #222838; }
+    tr:last-child { border-bottom: 0; }
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge.up { background: #123f2a; color: #4ade80; }
+    .badge.down { background: #3f1d2b; color: #f87171; }
+    .badge.starting { background: #3f3412; color: #facc15; }
+    .tui-link { color: #60a5fa; text-decoration: none; font-size: 13px; }
+    .tui-link:hover { text-decoration: underline; }
+    .tui-btn { background: #1d4ed8; color: white; border: 0; border-radius: 6px;
+               padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .tui-btn:hover { background: #1e40af; }
+    .tui-box { display: none; position: fixed; inset: 0; background: rgba(5,8,15,0.92);
+               z-index: 50; align-items: center; justify-content: center; }
+    .tui-box.open { display: flex; }
+    .tui-card { background: #171a23; border: 1px solid #2c3345; border-radius: 10px;
+                padding: 22px; max-width: 620px; width: 92%; }
+    .tui-card h3 { margin-bottom: 10px; font-size: 15px; }
+    .tui-url { width: 100%; padding: 10px; background: #0f1117; color: #93c5fd;
+               border: 1px solid #2c3345; border-radius: 6px; font-size: 13px; margin: 10px 0; }
+    .tui-close { position: absolute; top: 18px; right: 24px; cursor: pointer;
+                 font-size: 20px; color: #8b93a7; background: none; border: 0; }
+    .ram { font-variant-numeric: tabular-nums; }
+    .lat { color: #8b93a7; font-variant-numeric: tabular-nums; }
+    .log { color: #8b93a7; font-size: 13px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">⚙ Panel s1</div>
+    <div class="right">
+      <span class="user">{{.User}}</span>
+      <a class="btn btn-primary" href="/tareas">Tarea</a>
+      <a class="btn" href="/logout">Salir</a>
+    </div>
+  </div>
+
+  <main>
+    <form method="POST" action="/api/keepalive" class="toggle-row">
+      <label>Keep-Alive global</label>
+      <label class="switch">
+        <input type="checkbox" name="value" value="on" onchange="this.form.submit()" {{if .KeepAliveOn}}checked{{end}}>
+        <span class="slider"><span class="on">ON</span><span class="off">OFF</span></span>
+      </label>
+      <span class="hint">Ping a /health de cada servicio cada 10 min · registra up/down + latencia en Supabase</span>
+    </form>
+
+    <table>
+      <thead>
+        <tr><th>Servicio</th><th>Estado</th><th>RAM (MB)</th><th>Latencia</th><th>TUI</th><th>Actualizado</th></tr>
+      </thead>
+      <tbody>
+        {{range .Services}}
+        <tr>
+          <td><strong>{{.ID}}</strong></td>
+          <td><span class="badge {{.Estado}}">{{.Estado}}</span></td>
+          <td class="ram">{{if .RAMMB}}{{.RAMMB}} MB{{else}}—{{end}}</td>
+          <td class="lat">{{if .LatenciaMS}}{{.LatenciaMS}} ms{{else}}—{{end}}</td>
+          <td>
+            <div style="display:flex; gap:8px; align-items:center;">
+              {{if .URLTUI}}
+              <button type="button" class="tui-btn" data-servicio="{{.ID}}" data-tui="{{.URLTUI}}" onclick="emitToken(this)">Token</button>
+              <button type="button" class="tui-link" data-servicio="{{.ID}}" data-tui="{{.URLTUI}}" onclick="abrirTUI(this)">Abrir TUI →</button>
+              {{else}}<span class="log">sin terminal</span>{{end}}
+            </div>
+          </td>
+          <td class="lat">{{.UpdatedAt.Format "15:04:05"}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    <p class="log">Leído directamente de <code>services_status</code> en Supabase — s1 no guarda estado en RAM.</p>
+  </main>
+
+  <div class="tui-box" id="tui-box">
+    <button class="tui-close" onclick="document.getElementById('tui-box').classList.remove('open')">✕</button>
+    <div class="tui-card">
+      <h3 id="tui-title">Token TUI</h3>
+      <p class="hint" id="tui-hint">Tokens de corta duración (10 min) y de un solo uso. Pégalo como <code>?token=…</code> en la URL de la TUI del servicio.</p>
+      <input class="tui-url" id="tui-url" readonly onclick="this.select()">
+    </div>
+  </div>
+
+  <script>
+    async function emitTokenRaw(servicio) {
+      const res = await fetch('/api/tui/token', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({servicio})
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    }
+
+    // "Abrir TUI →": emite token y abre la TUI del servicio directamente.
+    // Abre la pestaña ANTES del fetch (síncrono al clic) para no ser
+    // bloqueado como popup por el navegador (window.open tras await = no-op).
+    async function abrirTUI(btn) {
+      if (!btn.dataset.servicio) { alert('Servicio no identificado'); return; }
+      const servicio = btn.dataset.servicio;
+      const win = window.open('', '_blank');
+      if (!win) { alert('Permite ventanas emergentes para abrir la TUI'); return; }
+      try {
+        const data = await emitTokenRaw(servicio);
+        const base = btn.dataset.tui || "{{.BaseURL}}/" + servicio;
+        let url;
+        if (base.toLowerCase().startsWith('http')) {
+          url = base + '?token=' + data.token;
+        } else {
+          url = "{{.BaseURL}}" + '/' + servicio + '?token=' + data.token;
+        }
+        win.location.href = url;
+      } catch (e) {
+        win.close();
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function emitToken(btn) {
+      if (!btn.dataset.servicio) { alert('Servicio no identificado'); return; }
+      const servicio = btn.dataset.servicio;
+      try {
+        const data = await emitTokenRaw(servicio);
+        const base = btn.dataset.tui || "{{.BaseURL}}/" + servicio;
+        let url;
+        if (base.toLowerCase().startsWith('http')) {
+          url = base + '?token=' + data.token;
+        } else {
+          url = "{{.BaseURL}}" + '/' + servicio + '?token=' + data.token;
+        }
+        document.getElementById('tui-title').textContent = 'Token TUI para ' + data.servicio;
+        document.getElementById('tui-url').value = url;
+        document.getElementById('tui-box').classList.add('open');
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+  </script>
+</body>
+</html>

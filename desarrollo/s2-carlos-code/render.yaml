@@ -1,0 +1,28 @@
+# Render blueprint para s2-carlos-code (grupo C).
+# En producción S2_EMIT_ON_TASK queda desactivado (flujo real Fase 8).
+services:
+  - type: web
+    name: s2-carlos-code
+    runtime: docker
+    repo: https://github.com/GENTLEMAN-INTEGRATIONS/sistema-agentes
+    plan: free
+    dockerfilePath: Desarrollo/s2-carlos-code/Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Supabase URL compartida (se define en el dashboard)
+      - key: S1_URL
+        sync: false
+      - key: CONTROL_TOKEN
+        sync: false
+      - key: OPENCODE_URL
+        sync: false # servidor opencode serve interno del servicio
+      - key: AGENT_MODE
+        value: plan
+      - key: S2_EMIT_ON_TASK
+        value: "0"
+      - key: CONTEXT_MAX_TOKENS
+        value: "200000"
+      - key: CONTEXT_COMPACT_AT
+        value: "170000"

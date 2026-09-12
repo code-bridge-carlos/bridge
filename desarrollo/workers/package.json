@@ -1,0 +1,19 @@
+{
+  "name": "workers-carlos-code",
+  "version": "0.1.0",
+  "description": "Workers w6-w10 del sistema multiagente: modo build sobre OpenCode headless, sin memoria entre subtareas, ciclo long-poll vía s1.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.5.0"
+  }
+}
