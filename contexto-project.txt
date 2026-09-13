@@ -1,0 +1,92 @@
+CODE BRIDGE CARLOS - MULTI-AGENT SYSTEM ANALYSIS REPORT
+(Read-only analysis of D:\yo code-bridge-carlos\bridge, all files read and verified)
+
+OVERALL PURPOSE
+This is a personal multi-agent "coding farm" (SISTEMA MULTIAGENTE, phase 14 / F2) built for a single owner, Carlos Pena, and deployed as ten Docker web services on Render's free tier. The owner submits programming tasks through a web control panel (s1-panel). An orchestrator agent (s2-carlos-code, "CARLOS_CODE") plans each task with the OpenCode headless LLM in permanent "plan" mode, saves the structured plan (plan_json), and splits it into 2-10 atomic subtasks. A Postgres-backed queue owned by s1 dispatches those subtasks to five build-mode worker agents (w6-w10), each of which executes them with OpenCode in "build" mode and reports results; the orchestrator evaluates outcomes and reassigns failed subtasks (up to 2 attempts). Around this pipeline the system provides persistent agent memory (Engram, s3), on-demand MCP tool servers (s4), a live status dashboard with per-service health monitoring and keep-alive, an hourly rotating validated HTTP proxy pool, and web/TUI access protected by one-time tokens. All state lives in a single shared Supabase PostgreSQL database; the system mirrors the same agent architecture (engram memory + plan/build agent modes) used by Gentle AI on a single machine.
+
+ARCHITECTURE
+Components and data flow (ports, callers, shared database):
+
+                    User (browser, Spanish UI)
+                    |  HMAC cookie login (s1_session)
+                    v
+   +-----------------------------------------------------+
+   | s1-panel (Go, :8080)  CONTROL PLANE                 |
+   | web UI (login/dashboard/tasks/proxies)              |
+   | dispatcher (5s tick) - queue in Postgres, never RAM |
+   | long-poll notifier per worker, heartbeat handling   |
+   | keep-alive monitor (10 min), proxy pool, TUI tokens |
+   +----+----------------------------------+-------------+
+        | POST /api/tasks                   | POST /api/subtareas (plan split)
+        | header X-Control-Token            | POST /api/notify (subtask finish)
+        v                                   v
++---------------------------+   +---------------------------------------------+
+| workers w6..w10 (Bun)     |   | s2-carlos-code (Bun, :9002) ORCHESTRATOR    |
+| :9006..:9010              |   | OpenCode plan agent -> plan_json -> split   |
+| long-poll 28s to s1       |   | evaluates results, reassigns failures (<=2) |
+| OpenCode build agent      |   | 200k context window, auto-compact at 170k   |
+| (or mock, dev only)       |   +-----------------------+---------------------+
+| safePath guard, 300s cap  |                           | HTTP (M2M CONTROL_TOKEN)
++------------+--------------+                           v
+             |                             +-----------------------------------+
+             v                             | s3-engram (:9003) DEPLOYED ARTIFACT|
++----------------------------------+       | = Bun wrapper only -> ENGRAM_URL  |
+| SHARED SUPABASE POSTGRES         |       | Go Engram API (observations CRUD  |
+| (single DATABASE_URL for all 10) |       |  + search) + GitHub mirror (repo  |
+| tasks, subtask_queue,            |       |  EMGRAN) NOT deployed             |
+| services_status (10 rows),       |       +-----------------------------------+
+| tareas_panel, engram_observations|       s4-mcps (:9004) DEPLOYED ARTIFACT
+| proxy_pool, proxy_assignments,   |         = Bun wrapper only (/health,
+| tui_access_tokens, settings      |           /estado, /mcp/list -> checks
++----------------------------------+           engram upstream); Go MCP broker
+                                               (context7, grep.app, github,
+                                               render MCPs via stdio) + mcp_logs
+                                               NOT deployed
+                                               s5-reservado (:9005): /health +
+                                               /estado only, nothing wired
+
+Call flow: user -> s1 web (HMAC cookie); s1 issues one-time TUI tokens that each destination (/tui) validates back against s1 via GET /api/tui/valida. s1 -> s2: POST /api/tasks; s2 -> OpenCode (plan mode) -> s1: POST /api/subtareas. s1 -> workers: long-poll GET /api/notificaciones/{worker_id}; workers -> s1: heartbeat POST /api/subtareas/{id}/heartbeat, progress, and finish POST /api/subtareas/{id}/fin. Dispatcher preemption: no heartbeat for 60s -> subtask declared stuck and reassigned from scratch; worker idle 300s -> handoff. s1 -> s2: POST /api/notify on every subtask finish. Keep-alive: s1 pings GET /health of all 10 services every 10 min and writes services_status (global toggle settings.keep_alive, default off). Proxies: s1 refreshes hourly from the proxmint/free-proxy-list GitHub list, verifies them via api.ipify.org, assigns one per service; services fetch theirs via POST /api/proxy/obtener (public CORS). Memory: services write/read observations through s3 Engram (as designed); the GitHub mirror pushes each memory to repo EMGRAN as markdown. M2M auth between s1, s2 and workers uses header X-Control-Token with the shared CONTROL_TOKEN.
+
+SERVICE SUMMARIES
+s1-panel - Control plane. Go 1.23, single dependency github.com/jackc/pgx/v5. Entry point: main.go (default port 8080; Dockerfile golang:1.23-alpine, CMD runs s1 with -port 8080). Owns the entire queue/dispatch model in Postgres (stateless process), login with per-IP rate limit and HMAC-signed cookie, long-poll notification endpoints, keep-alive monitor, proxy pool refresh/verify/rotate, TUI token lifecycle (EmitTUIToken/ValidateTUIToken with SHA-256 hashes), and a retry notifier for S2 failures. Fails closed in production (APP_ENV=production requires PANEL_PASSWORD, SESSION_SECRET >= 16 chars, CONTROL_TOKEN).
+
+s2-carlos-code - Orchestrator. Bun/TypeScript, dependency "postgres". Entry point: src/index.ts (port 9002). Receives tasks from s1, runs OpenCode plan sessions (300s timeout, AGENT_MODE=plan), saves plan_json, splits into 2-10 subtasks, evaluates subtask results on /api/notify and resets failures to pending (intentos_reasignacion=2), 200k-token context window with auto-compaction at 170k (src/compact.ts), TUI at /tui. Ships the plan-mode agent prompt (agent-orquestador.md).
+
+s3-engram - Persistent memory (Engram). Two artifacts: a Go REST API (main.go + internal/{api,config,mirror,store}, port 3000) offering observations CRUD + multi-criteria search over the engram_observations table, CONTROL_TOKEN auth, and an optional "physical mirror" that pushes each memory to GitHub repo EMGRAN (observaciones/<id>.md via the Contents API) when GITHUB_TOKEN is set; and a Bun wrapper (src/index.ts, port 9003) that only health-checks and proxies /stats and /observations from ENGRAM_URL (default http://127.0.0.1:7437). DEPLOYED ARTIFACT: the Bun wrapper only (Dockerfile oven/bun:1-slim runs src/index.ts); the Go API is never built.
+
+s4-mcps - MCP broker (on-demand). A Go REST API (cmd/s4/main.go + internal/{api,mcp,registry,mcpexec,mcplogs,config}) exposing GET /mcp and POST /mcp/{name}/ejecutar; spawns MCP servers (context7, grep.app, github, render) as stdio children on first use, reuses sessions across calls, kills after a 5s grace, 90s timeout, and logs best-effort to the mcp_logs table; cmd/mockmcp is a test-only fake MCP. A Bun wrapper (src/index.ts, port 9004) exposes only /health, /estado and /mcp/list (which merely checks the engram upstream). DEPLOYED ARTIFACT: the Bun wrapper only (Dockerfile oven/bun:1-slim); the Go MCP broker is never built.
+
+s5-reservado - Reserved placeholder slot. Bun, zero dependencies. Entry point: src/index.ts (port 9005); only /health (ok) and /estado returning "servicio placeholder para expansion futura". Nothing else is wired.
+
+workers w6-w10 - Build-mode execution agents. Bun/TypeScript, dependency "postgres". Entry point: src/index.ts (port 9000+N => 9006..9010). Worker loop in src/worker.ts: long-poll GET /api/notificaciones/{worker_id} (28s poll), execute the subtask with the OpenCode build agent (prompt in agent-worker.md) or with WORKER_MOCK_BUILD=1 synthetic mode, report POST /api/subtareas/{id}/fin with {estado, resultado:{exit,files,summary}}. Safety: safePath rejects traversal outside WORKER_WORKDIR, 300s preemption cap (PREEMPT_MS), 50k-token visual window that is never sent to the LLM, per-worker /simular dev route and TUI validated against s1.
+
+DEPLOYMENT
+Root render.yaml (D:\yo code-bridge-carlos\bridge\render.yaml, 275 lines, header "Fase 14 (F2)") defines exactly 10 web services, runtime docker, plan free, each with healthCheckPath /health and built from its ./desarrollo/<dir> dockerContext; the header states the required secrets: DATABASE_URL (Supabase/Postgres), SESSION_SECRET, PANEL_PASSWORD, CONTROL_TOKEN.
+
+  s1-panel        :8080  Go      env: PANEL_USER=admin, PANEL_PASSWORD, SESSION_SECRET, S2_URL, S2_NOTIFY_URL, CONTROL_TOKEN, SERVICES_BASE_URL (sync:false), PROXY_MAX_IMPORT=12, PROXY_CHECK_BATCH=4, RENDER_KEY_1, RENDER_ACCOUNT_1
+  s2-carlos-code  :9002  Bun     env: DATABASE_URL, S1_URL, CONTROL_TOKEN, OPENCODE_URL (sync:false); AGENT_MODE=plan, S2_EMIT_ON_TASK=0, S2_MOCK_PLAN=0, CONTEXT_MAX_TOKENS=200000, CONTEXT_COMPACT_AT=170000, RENDER_KEY_2, RENDER_ACCOUNT_2
+  s3-engram       :9003  Bun     env: S1_URL, CONTROL_TOKEN, ENGRAM_URL (sync:false); NO DATABASE_URL, NO GITHUB_TOKEN; RENDER_KEY_3, RENDER_ACCOUNT_3; blueprint comment: "Engram wrapper (memoria persistente)"
+  s4-mcps         :9004  Bun     env: ONLY PORT + S1_URL (sync:false); NO CONTROL_TOKEN, NO DATABASE_URL, NO GITHUB_TOKEN, and NO ENGRAM_URL; RENDER_KEY_4, RENDER_ACCOUNT_4; blueprint comment: "MCPs status"
+  s5-reservado    :9005  Bun     env: PORT only; RENDER_KEY_5, RENDER_ACCOUNT_5
+  worker-w6..w10 :9006..9010 Bun env: PORT, WORKER_ID=w6..w10, WORKER_MOCK_BUILD=0, S1_URL, CONTROL_TOKEN, OPENCODE_URL (sync:false), RENDER_KEY_6..10, RENDER_ACCOUNT_6..10
+
+Connection model: all 10 services share the Supabase DATABASE_URL and the M2M CONTROL_TOKEN (header X-Control-Token); s1 discovers peers through the services_status table (seeded with localhost URLs; production URLs come from SERVICES_BASE_URL, phase 14). Every service block also contains a committed RENDER_KEY_N/RENDER_ACCOUNT_N pair (see NOTABLE FINDINGS). The proxy-local Python service is present only as a commented-out block (dev-only, not deployed).
+
+Verified deployment gaps (both flags confirmed in the final verification):
+1. s4-mcps receives no ENGRAM_URL in render.yaml (lines 114-122), so its deployed Bun wrapper always probes the default loopback http://127.0.0.1:7437 and /mcp/list will always report the engram upstream as unavailable.
+2. The blueprint comments explicitly label s3 "Engram wrapper" and s4 "MCPs status" (render.yaml lines 84 and 106). Consequence: the real Go Engram API (observations CRUD/search + GitHub mirror) and the Go MCP broker (context7/grep.app/github/render + mcp_logs) are NOT deployed on Render; both Dockerfiles run only the Bun status wrappers.
+
+NOTABLE FINDINGS
+1. SECRETS IN PLAINTEXT (locations only, no values): root render.yaml commits 10 Render API keys plus their owner account emails (RENDER_KEY_1..10 / RENDER_ACCOUNT_1..10) on lines 45-48, 79-82, 101-104, 119-122, 135-138, 161-164, 186-189, 211-214 and 261-264. These are real Render credentials tied to ten different email accounts. Rotate immediately and move them to Render secret env vars (sync:false).
+2. Hardcoded dev fallback secrets in code (locations only, no values): s1-panel/main.go embeds a dev panel password and a dev session secret (production aborts on missing env when APP_ENV=production, so s1 fails closed); every Bun config.ts (s2, s3, s4, s5, workers) and the scripts under desarrollo/s1-panel/scripts/ hardcode a shared default M2M CONTROL_TOKEN; a local dev Postgres URL with test credentials appears in s1-panel/main.go and all Bun config.ts/start scripts.
+3. s4 deployed service has no authentication: render.yaml wires only PORT + S1_URL for s4-mcps, and its Bun wrapper exposes /health, /estado and /mcp/list without any token check.
+4. Deployment/artifact mismatch for s3 and s4: desarrollo/s3-engram/Dockerfile and desarrollo/s4-mcps/Dockerfile are bun:1-slim images running src/index.ts; the Go backends (their main.go + internal/ packages, including the Engram GitHub mirror and the MCP executor with mcp_logs) are never built or deployed.
+5. s4-mcps missing ENGRAM_URL: render.yaml lines 114-122 wire only PORT and S1_URL; the wrapper defaults to http://127.0.0.1:7437 (loopback, nothing listening in the container), so its /mcp/list always reports the engram upstream down.
+6. OpenCode is external and not bundled: s2 and all workers call OPENCODE_URL (default http://localhost:18000) but no Docker image embeds an OpenCode server and render.yaml sets OPENCODE_URL sync:false. Without it, or with mocks on (S2_EMIT_ON_TASK, S2_MOCK_PLAN, WORKER_MOCK_BUILD), the real plan/execute loop cannot run in production.
+7. s5-reservado is a pure placeholder (desarrollo/s5-reservado/src/index.ts): /health + /estado only, zero dependencies, occupying a free-tier slot.
+8. TUI chat is broken in s2: the TUI JS POSTs to /api/contexto but src/server.ts only implements GET /api/contexto, so chat always answers "Sin respuesta"; the TUI slash commands (/start, /ready, /models, /clear-cache) are text-only stubs (src/server.ts routes around lines 355-375).
+9. CORS allowlist drift: s1 internal/web/web.go (~line 1208) and s2 src/cors.ts hardcode only s1-panel.onrender.com and s2-carlos-code.onrender.com; the domains of the other eight services are absent.
+10. Repo/URL inconsistencies: the root render.yaml has no repo URL (services must be connected per-directory after pushing the root repo to GitHub, per its own header comment); s2-carlos-code/render.yaml points to GENTLEMAN-INTEGRATIONS/sistema-agentes with dockerfilePath "Desarrollo/s2-carlos-code/Dockerfile" (capital D breaks case-sensitive CI; the actual folder is lowercase desarrollo); workers/render.yaml uses a placeholder repo (SUBSTITUIR/SISTEMA-MULTIAGENTE) and a placeholder databases block with the comment to use real Supabase.
+11. Keep-alive cannot work yet: desarrollo/s1-panel/db/schema.sql seeds services_status.url_base with localhost URLs; production URLs were planned for "Fase 14" (comments in s1-panel/main.go and schema.sql). Until populated, keep-alive marks services down, and the global toggle settings.keep_alive also defaults to off.
+12. Schema drift across the repo: docs/supabase-schema.md documents 8 tables, but s1-panel/db/schema.sql has a 9th (settings) plus later-phase columns (s2_notified_at, heartbeat_at, intentos_reasignacion, proxy classification fields, task_id); s3-engram/db/schema.sql re-declares engram_observations with additional columns (context, etiquetas, autor, repo_path, project NOT NULL DEFAULT 'ok') and its own ALTERs; s4-mcps/db/schema.sql adds mcp_logs (undocumented). Two divergent definitions of the same engram_observations table.
+13. Placeholders and TODOs: no README anywhere in the repo; no committed .env files (good); s2-carlos-code/bridge/context.txt is a one-line stub; SOCKS4/SOCKS5 proxy support is explicitly deferred (desarrollo/s1-panel/internal/proxies/proxies.go, "Fase 13"); s3-engram/go.mod pins go 1.27 vs go 1.23 in s1 (uneven toolchain); Render free tier sleeps after ~15 min idle (noted in workers/render.yaml) - keep-alive is the countermeasure but depends on finding 11.

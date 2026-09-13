@@ -343,7 +343,7 @@ async function cargarEstado(){
 function anyadirRegistro(mensaje, tipo='info'){
   const log=document.getElementById('log');
   const div=document.createElement('div');
-  div.textContent = `${new Date().toLocaleTimeString() } [${tipo}] ${mensaje}`;
+  div.textContent = new Date().toLocaleTimeString() + ' [' + tipo + '] ' + mensaje;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
 }
@@ -379,7 +379,7 @@ async function actualizarTokens(){
   try{
     const r=await fetch('/estado');
     const d=await r.json();
-    if(d.ram_mb)anyadirRegistro(`RAM: ${d.ram_mb}MB`, 'info');
+    if(d.ram_mb)anyadirRegistro('RAM: ' + d.ram_mb + 'MB', 'info');
   }catch(e){}
 }
 setInterval(actualizarTokens, 3000);
